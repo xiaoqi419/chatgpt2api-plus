@@ -1,0 +1,19 @@
+services:
+  app:
+    build: .
+    container_name: chatgpt2api
+    restart: unless-stopped
+    ports:
+      - "3001:80"
+    volumes:
+      - ./data:/app/data
+      - ./config.json:/app/config.json
+    environment:
+      STORAGE_BACKEND: json
+    networks:
+      - app_net
+
+networks:
+  app_net:
+    external: true
+    name: chatgpt2api_default

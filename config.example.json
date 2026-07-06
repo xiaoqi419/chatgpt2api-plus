@@ -1,0 +1,25 @@
+{
+  "auth-key": "your-auth-key",
+  "refresh_account_interval_minute": 5,
+  "image_retention_days": 15,
+  "image_poll_timeout_secs": 120,
+  "auto_remove_rate_limited_accounts": false,
+  "auto_remove_invalid_accounts": true,
+  "log_levels": ["debug", "error", "info", "warning"],
+  "proxy": "http://proxy:7890",
+  "proxy_runtime": {
+    "enabled": true,
+    "egress_mode": "single_proxy",
+    "proxy_url": "http://proxy:7890",
+    "resource_proxy_url": "",
+    "skip_ssl_verify": true,
+    "reset_session_status_codes": [403],
+    "clearance": {
+      "enabled": true,
+      "mode": "flaresolverr",
+      "flaresolverr_url": "http://flaresolverr:8191",
+      "browser": "chrome"
+    }
+  },
+  "base_url": "https://your-domain.com"
+}
