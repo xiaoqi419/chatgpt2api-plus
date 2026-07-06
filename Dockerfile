@@ -1,9 +1,11 @@
-FROM ghcr.io/basketikun/chatgpt2api:latest
-
 # ============================================================
 # chatgpt2api-plus — v1.7.0 + 注册机整合版
-# 基于官方镜像，叠加注册功能代码
+# 
+# 基于官方镜像构建 + 源码级前端修改 + Python 整合
+# 前端源码在 web/ 目录，导航栏已原生加入注册入口
 # ============================================================
+
+FROM ghcr.io/basketikun/chatgpt2api:latest AS base
 
 # 复制整合后的 Python 源码（含注册机）
 COPY api/ /app/api/
@@ -12,7 +14,10 @@ COPY utils/ /app/utils/
 COPY main.py /app/main.py
 COPY scripts/ /app/scripts/
 
-# 复制注册管理前端页面及设置页面注入
+# 保留前端源码到镜像（方便后续二次开发）
+COPY web/ /app/web-src/
+
+# 复制注册管理前端页面
 COPY web_dist/ /app/web_dist/
 
 # 更新 Next.js 构建清单，添加 /register 路由
@@ -43,9 +48,8 @@ for bid in build_ids:
         print(f"Updated: {manifest_path} -> {manifest['sortedPages']}")
 PYEOF
 
-# 在编译好的 JS 导航中加入"注册"入口
+# 在编译好的 JS 导航栏中加入"注册"入口（源码级修改在 web/ 目录中）
 RUN sed -i 's|{href:"/image",label:"生图"},{href:"/accounts",label:"号池管理"},{href:"/image-manager",label:"图片管理"}|{href:"/image",label:"生图"},{href:"/accounts",label:"号池管理"},{href:"/register",label:"注册"},{href:"/image-manager",label:"图片管理"}|' /app/web_dist/_next/static/chunks/0yr6d8ut74nyx.js \
   && echo "Nav patched: register tab added to top-nav"
 
-# 保持原镜像的入口
 CMD ["uv", "run", "python", "main.py"]
