@@ -921,3 +921,147 @@ export async function testProxyClearance(targetUrl?: string) {
     body: { target_url: targetUrl ?? "https://chatgpt.com" },
   });
 }
+
+// ========== 注册机 ==========
+
+export type RegisterMailProvider = {
+  enable: boolean;
+  type: string;
+  api_base: string;
+  admin_email: string;
+  admin_password: string;
+  domain: string[];
+  subdomain: string;
+  email_prefix: string;
+  api_key: string;
+  wildcard: boolean;
+};
+
+export type RegisterStats = {
+  success: number;
+  fail: number;
+  done: number;
+  running: number;
+  threads: number;
+  elapsed_seconds: number;
+  avg_seconds: number;
+  success_rate: number;
+  current_quota: number;
+  current_available: number;
+  updated_at: string;
+  job_id?: string;
+  started_at?: string;
+};
+
+export type RegisterLogEntry = {
+  time: string;
+  text: string;
+  level: string;
+};
+
+export type RegisterConfig = {
+  mail: { providers: RegisterMailProvider[] };
+  proxy: string;
+  total: number;
+  threads: number;
+  mode: string;
+  target_quota: number;
+  target_available: number;
+  check_interval: number;
+  enabled: boolean;
+  stats: RegisterStats;
+  logs: RegisterLogEntry[];
+};
+
+export type RegisterResponse = {
+  register: RegisterConfig;
+};
+
+export async function fetchRegisterConfig() {
+  return httpRequest<RegisterResponse>("/api/register");
+}
+
+export async function updateRegisterConfig(config: {
+  total?: number;
+  threads?: number;
+  mode?: string;
+  proxy?: string;
+  target_quota?: number;
+  target_available?: number;
+}) {
+  return httpRequest<RegisterResponse>("/api/register", {
+    method: "POST",
+    body: config,
+  });
+}
+
+export async function startRegister() {
+  return httpRequest<RegisterResponse>("/api/register/start", {
+    method: "POST",
+  });
+}
+
+export async function stopRegister() {
+  return httpRequest<RegisterResponse>("/api/register/stop", {
+    method: "POST",
+  });
+}
+
+export async function resetRegister() {
+  return httpRequest<RegisterResponse>("/api/register/reset", {
+    method: "POST",
+    body: {},
+  });
+}
+
+/**
+ * Subscribe to SSE events from /api/register/events.
+ * Returns an unsubscribe function.
+ */
+export function subscribeRegisterEvents(onEvent: (data: RegisterConfig) => void): () => void {
+  let aborted = false;
+
+  const connect = async () => {
+    if (aborted) return;
+    try {
+      const authKey = (await import("@/store/auth")).getStoredAuthKey;
+      const key = await authKey();
+      const url = `${webConfig.apiUrl.replace(/\/$/, "")}/api/register/events`;
+      const response = await fetch(url, {
+        headers: key ? { Authorization: `Bearer ${key}` } : {},
+      });
+      if (!response.ok || !response.body) {
+        console.error("[register] SSE connect failed");
+        return;
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (!aborted) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.register) {
+                onEvent(data as RegisterConfig);
+              }
+            } catch { /* skip malformed JSON */ }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[register] SSE error:", err);
+    }
+  };
+
+  connect();
+  return () => {
+    aborted = true;
+  };
+}

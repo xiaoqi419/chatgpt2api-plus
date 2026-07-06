@@ -1,13 +1,28 @@
 # ============================================================
 # chatgpt2api-plus — v1.7.0 + 注册机整合版
-# 基于官方镜像 + 注册后端 + 导航原生注册入口
-# 前端源码在 web/ 目录，导航 TopNav 已加入注册 tab
+# 前端完全从源码构建，注册入口原生集成无 hack
 # ============================================================
 
+# === 阶段一：构建前端 ===
+FROM node:22-alpine AS web-builder
+
+WORKDIR /app/web
+
+# 安装依赖 (bun.lock = lockfile)
+COPY web/package.json web/bun.lock ./
+RUN npm install
+
+# 构建前端 (需要 VERSION 文件)
+COPY VERSION /app/VERSION
+COPY web ./
+ENV NEXT_PUBLIC_APP_VERSION="$(cat /app/VERSION)"
+RUN npm run build
+
+# === 阶段二：最终镜像 ===
 FROM ghcr.io/basketikun/chatgpt2api:latest
 
-# 注册管理前端页面（独立 HTML，零外部依赖）
-COPY web_dist/ /app/web_dist/
+# 替换为完整构建的前端产物（含 register 页面 + 原生导航入口）
+COPY --from=web-builder /app/web/out /app/web_dist
 
 # 整合后的 Python 源码（含注册机）
 COPY api/ /app/api/
@@ -19,7 +34,7 @@ COPY scripts/ /app/scripts/
 # 保留前端源码到镜像（方便后续二次构建）
 COPY web/ /app/web-src/
 
-# 更新 Next.js 构建清单，添加 /register 路由
+# 更新 Next.js 构建清单，添加 /register 路由（编译产物页）
 RUN python3 << 'PYEOF'
 import json, os
 static_dir = "/app/web_dist/_next/static"
@@ -42,10 +57,5 @@ for bid in build_ids:
             f.write(new_content)
         print(f"Updated: {manifest_path} -> {manifest['sortedPages']}")
 PYEOF
-
-# 在编译好的 JS 导航栏中加入"注册"入口
-RUN sed -i 's|{href:"/image",label:"生图"},{href:"/accounts",label:"号池管理"},{href:"/image-manager",label:"图片管理"}|{href:"/image",label:"生图"},{href:"/accounts",label:"号池管理"},{href:"/register",label:"注册"},{href:"/image-manager",label:"图片管理"}|' /app/web_dist/_next/static/chunks/0yr6d8ut74nyx.js \
-  && grep -c 'register' /app/web_dist/_next/static/chunks/0yr6d8ut74nyx.js \
-  && echo "Nav patched: register tab added to top-nav ✓"
 
 CMD ["uv", "run", "python", "main.py"]
