@@ -45,3 +45,6 @@ PYEOF
 
 # 保持原镜像的入口
 CMD ["uv", "run", "python", "main.py"]
+
+# 注入注册导航到设置页面
+COPY web_dist/settings/index.html /app/web_dist/settings/index.html
